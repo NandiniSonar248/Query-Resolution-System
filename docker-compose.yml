@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_MODE=local
+      - SQLALCHEMY_DATABASE_URL=sqlite:///./app.db
+      - CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+    volumes:
+      - backend_db:/app
+    depends_on:
+      - ollama
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
+  backend_db:

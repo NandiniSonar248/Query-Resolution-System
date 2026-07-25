@@ -38,9 +38,9 @@
 ## In Progress / Pending Work
 
 ### Phase 1 Remaining Polish
-- [ ] Root `docker-compose.yml` (orchestrating frontend, backend, PostgreSQL, and Ollama).
-- [ ] `frontend/Dockerfile`.
-- [ ] Project `README.md` with complete installation and run instructions.
+- [x] Root `docker-compose.yml` (orchestrating frontend, backend, PostgreSQL, and Ollama).
+- [x] `frontend/Dockerfile`.
+- [x] Project `README.md` with complete installation and run instructions.
 
 ### Phase 2: Core Agent Pipeline (Next Milestone)
 - [ ] **Query Understanding Agent** (`backend/app/agents/query_understanding.py`): LLM query classification (`factual`, `procedural`, `comparative`, `ambiguous`) & context-aware query rewriting.
