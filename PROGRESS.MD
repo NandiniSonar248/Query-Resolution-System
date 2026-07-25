@@ -50,7 +50,7 @@
 
 - [x] **Query Understanding Agent** (`backend/app/agents/query_understanding.py`): LLM query classification (`factual`, `procedural`, `comparative`, `ambiguous`) & context-aware query rewriting.
 - [x] **Retrieval Agent Node** (`backend/app/agents/retrieval.py`): LangGraph node wrapping vector retriever with score filtering.
-- [ ] **Response Generation Agent** (`backend/app/agents/response_generation.py`): Grounded response synthesis with strict citation generation & confidence calculation.
+- [x] **Response Generation Agent** (`backend/app/agents/response_generation.py`): Grounded response synthesis with strict citation generation & confidence calculation.
 - [ ] **LangGraph Multi-Agent Orchestrator** (`backend/app/agents/orchestrator.py`): State graph connecting Query Understanding → Retrieval → Generation.
 - [ ] **Query API Endpoint** (`backend/app/api/query.py` & `backend/app/services/query_service.py`): `/api/v1/query` endpoint.
 - [ ] **Frontend Chat Interface** (`frontend/src/pages/Chat.jsx`): Chat interface with turn history, `ChatBubble`, `SourcePanel`, and `ConfidenceBadge`.
