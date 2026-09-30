@@ -33,7 +33,9 @@ def query_understanding_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "   - procedural: Asking for instructions or how to do something.\n"
         "   - comparative: Asking to compare multiple items, policies, etc.\n"
         "   - ambiguous: The query is too vague, unclear, or lacks enough context to be answered.\n\n"
-        "2. Generate a 'normalized_query'. Resolve any pronouns (it, they, he) or vague references "
+        "2. Generate a 'normalized_query'. Fix any spelling mistakes or typos. "
+        "Expand common acronyms to their full forms to improve search accuracy (e.g., expand 'NPS' to 'National Pension System', 'PF' to 'Provident Fund'). "
+        "Resolve any pronouns (it, they, he) or vague references "
         "using the chat history so the query can be understood completely on its own.\n\n"
         "3. Provide a 'confidence' score between 0.0 and 1.0 representing how confident you are in your classification.\n\n"
         "Respond ONLY with a JSON object containing EXACTLY these keys: "
@@ -42,25 +44,21 @@ def query_understanding_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     prompt = f"Chat History:\n{history_text}\n\nUser Query: {query}"
 
-    payload = {
-        "model": settings.OLLAMA_CHAT_MODEL,
-        "system": system_prompt,
-        "prompt": prompt,
-        "format": "json",
-        "stream": False,
-        "options": {
-            "temperature": 0.0  # low temp for consistent classification
-        }
-    }
-    
-    url = f"{settings.OLLAMA_BASE_URL}/api/generate"
-    
     try:
-        resp = httpx.post(url, json=payload, timeout=30.0)
-        resp.raise_for_status()
-        data = resp.json()
-        response_text = data.get("response", "{}")
+        from google import genai
+        from google.genai import types
         
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=settings.GEMINI_CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.0,
+                response_mime_type="application/json"
+            )
+        )
+        response_text = response.text
         parsed = json.loads(response_text)
         
         return {
@@ -69,7 +67,8 @@ def query_understanding_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "query_confidence": float(parsed.get("confidence", 0.0))
         }
         
-    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
+    except Exception as e:
+        print(f"Query Understanding Error: {e}")
         # Fallback if LLM fails or returns invalid JSON
         return {
             "query_type": "ambiguous",

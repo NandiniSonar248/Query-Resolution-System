@@ -10,8 +10,11 @@ Design decision (SPEC §11):
     Stored metadata per chunk: document_id, source_doc, chunk_index, page
 """
 from typing import List, Dict, Any, Optional
+import os
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 from app.core.config import settings
 

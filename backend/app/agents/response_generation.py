@@ -19,79 +19,86 @@ def response_generation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     normalized_query = state.get("normalized_query", "")
     chunks = state.get("chunks", [])
-    chat_history = state.get("chat_history", [])
     
     # 1. Handle case where no chunks were found
     if not chunks:
         return {
-            "answer_text": "I don't have enough information.",
+            "answer_text": "I don't have enough information in the knowledge base to answer this question. Please upload relevant documents first.",
             "citations": [],
             "generation_confidence": 0.0
         }
         
-    # 2. Format chunks for the prompt
+    # 2. Format chunks for the prompt (Gemini has a 1M token context, so we can pass all retrieved chunks)
     chunks_text = ""
+    citation_list = []
     for c in chunks:
         chunk_id = c.get("chunk_id", "unknown_chunk")
         source = c.get("source_doc", "unknown_source")
+        citation_list.append({"chunk_id": chunk_id, "source_doc": source})
+        
         text = c.get("text", "")
-        chunks_text += f"--- Chunk ID: {chunk_id} | Source: {source} ---\n{text}\n\n"
-        
-    # 3. Format chat history
-    history_text = "None"
-    if chat_history:
-        history_lines = [f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" for msg in chat_history]
-        history_text = "\n".join(history_lines)
-        
-    # 4. Construct System Prompt
+        chunks_text += f"{text}\n\n"
+
+    # 3. Assertive prompt optimized for small models (llama3.2:1b)
     system_prompt = (
-        "You are an expert answering questions based strictly on the provided Context Chunks. "
-        "Do not use any outside knowledge.\n\n"
-        "Instructions:\n"
-        "1. Read the Context Chunks to find the answer to the User Query.\n"
-        "2. If the context does not contain the answer, your answer_text MUST be exactly: \"I don't have enough information.\"\n"
-        "3. If you find the answer, write a clear response in answer_text. Do not include inline citation numbers in the text.\n"
-        "4. Provide a list of 'citations'. Each citation is an object with 'chunk_id' and 'source_doc' corresponding to the chunks you used. "
-        "If you could not answer, citations should be an empty list.\n"
-        "5. Provide a 'generation_confidence' float score between 0.0 and 1.0 indicating how well the context supports your answer. "
-        "If you could not answer, set confidence to 0.0.\n\n"
-        "Respond ONLY with a JSON object containing EXACTLY these keys: "
-        '"answer_text" (string), "citations" (list of objects with "chunk_id" and "source_doc"), and "generation_confidence" (float).'
+        "You are a document summary assistant. "
+        "You will be given text extracted from company documents. "
+        "Your job is to summarize the relevant information clearly and accurately. "
+        "Only use the text provided. Do not add any outside information."
     )
     
-    prompt = f"Context Chunks:\n{chunks_text}\nChat History:\n{history_text}\n\nUser Query: {normalized_query}"
-    
-    payload = {
-        "model": settings.OLLAMA_CHAT_MODEL,
-        "system": system_prompt,
-        "prompt": prompt,
-        "format": "json",
-        "stream": False,
-        "options": {
-            "temperature": 0.1  # low temp for grounded facts
-        }
-    }
-    
-    url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+    prompt = f"Here is text from the company documents:\n\n{chunks_text}\nSummarize what the documents say about: {normalized_query}"
     
     try:
-        resp = httpx.post(url, json=payload, timeout=60.0)
-        resp.raise_for_status()
-        data = resp.json()
-        response_text = data.get("response", "{}")
+        from google import genai
+        from google.genai import types
         
-        parsed = json.loads(response_text)
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=settings.GEMINI_CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2
+            )
+        )
+        answer = response.text.strip()
+        
+        if not answer:
+            answer = "I couldn't generate an answer. Please try rephrasing your question."
+        
+        # Calculate confidence dynamically from retrieval scores
+        avg_similarity = sum(c.get("similarity_score", 0.5) for c in chunks) / len(chunks)
+        
+        # We use the same broad phrases we use in memory.py to detect an unanswered query
+        NO_ANSWER_PHRASES = [
+            "no information", "no mention", "not mentioned", "not discussed",
+            "not found", "not covered", "not in the document", "cannot find",
+            "no relevant information", "not provided", "does not mention",
+            "not available", "i don't have enough", "i cannot", "does not contain",
+            "not contain information", "only contains information", "only discusses",
+            "only covers", "unrelated to", "outside the scope", "not related to"
+        ]
+        
+        is_unanswered = any(phrase in answer.lower() for phrase in NO_ANSWER_PHRASES)
+        
+        if is_unanswered:
+            confidence = max(0.0, avg_similarity * 0.1) # Extremely low confidence
+            citation_list = [] # Don't cite sources if we didn't find the answer in them!
+        else:
+            confidence = min(0.95, avg_similarity * 1.05)
         
         return {
-            "answer_text": parsed.get("answer_text", "I don't have enough information."),
-            "citations": parsed.get("citations", []),
-            "generation_confidence": float(parsed.get("generation_confidence", 0.0))
+            "answer_text": answer,
+            "citations": citation_list,
+            "generation_confidence": round(confidence, 4)
         }
         
-    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
+    except Exception as e:
+        print(f"Response Generation Error: {e}")
         # Fallback if LLM fails
         return {
-            "answer_text": "I encountered an error generating the response.",
+            "answer_text": "I encountered an error generating the response. Please try again.",
             "citations": [],
             "generation_confidence": 0.0
         }

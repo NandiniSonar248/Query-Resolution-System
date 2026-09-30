@@ -25,8 +25,21 @@ export const queryApi = {
 export const historyApi = {
   sessions: () => api.get('/history/sessions'),
   session:  (id) => api.get(`/history/sessions/${id}`),
+  deleteSession: (id) => api.delete(`/history/sessions/${id}`),
 }
 
 export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
+  reset: () => api.delete('/analytics/reset'),
+}
+
+export const voiceApi = {
+  transcribe: (audioBlob) => {
+    const form = new FormData();
+    form.append('file', audioBlob, 'recording.webm');
+    return api.post('/voice/transcribe', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  synthesize: (text) => {
+    return api.post('/voice/synthesize', { text }, { responseType: 'blob' });
+  }
 }

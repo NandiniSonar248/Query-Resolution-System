@@ -16,10 +16,13 @@ passlib[bcrypt]==1.7.4
 
 # RAG
 chromadb==0.5.15
-httpx==0.27.2           # Ollama HTTP calls
+httpx==0.27.2           # Ollama HTTP calls (kept as fallback)
+google-genai>=1.0.0     # Gemini embeddings (production provider)
+sentence-transformers>=3.0.0  # Cross-Encoder re-ranking (ms-marco-MiniLM-L-6-v2)
 
 # Document parsing
 pymupdf==1.24.10        # PDF loading (fitz)
+pdfplumber>=0.11.0      # PDF fallback for scanned/image PDFs
 python-docx==1.1.2      # DOCX loading
 
 # LangGraph (used in Phase 2, installed now to avoid dependency conflicts)

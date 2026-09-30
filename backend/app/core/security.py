@@ -14,20 +14,24 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import hashlib
 
 from app.core.config import settings
 
 # ── Password hashing ──────────────────────────────────────────────────────────
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    safe_string = hashlib.sha256(plain.encode('utf-8')).hexdigest()
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(safe_string.encode('utf-8'), salt).decode('utf-8')
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        safe_string = hashlib.sha256(plain.encode('utf-8')).hexdigest()
+        return bcrypt.checkpw(safe_string.encode('utf-8'), hashed.encode('utf-8'))
+    except ValueError:
+        return False
 
 
 # ── JWT token helpers ─────────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ export default function Register() {
     setLoading(true)
     try {
       await register(form)
-      toast.success('Account created! Welcome to QueryAI.')
-      navigate('/chat')
+      toast.success('Account created!')
+      navigate('/home')
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed.')
     } finally {
@@ -34,8 +34,8 @@ export default function Register() {
       <div className="auth-container animate-fade-in-up">
         <div className="auth-brand">
           <div className="auth-logo">⚡</div>
-          <h1>QueryAI</h1>
-          <p>Create your account</p>
+          <h1>Query Resolution</h1>
+          <p>Join the AI Platform</p>
         </div>
 
         <div className="card" style={{ padding: 'var(--space-8)' }}>

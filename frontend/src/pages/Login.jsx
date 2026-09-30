@@ -17,7 +17,7 @@ export default function Login() {
     try {
       await login(form)
       toast.success('Welcome back!')
-      navigate('/chat')
+      navigate('/home')
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Check your credentials.')
     } finally {
@@ -30,8 +30,8 @@ export default function Login() {
       <div className="auth-container animate-fade-in-up">
         <div className="auth-brand">
           <div className="auth-logo">⚡</div>
-          <h1>QueryAI</h1>
-          <p>Intelligent Query Resolution System</p>
+          <h1>Query Resolution</h1>
+          <p>Intelligent AI System</p>
         </div>
 
         <div className="card" style={{ padding: 'var(--space-8)' }}>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, status
+from fastapi import APIRouter, Depends, UploadFile, File, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -6,6 +6,7 @@ from app.core.db import get_db
 from app.services.user_service import get_current_user
 from app.services.upload_service import ingest_document, list_documents, delete_document
 from app.models.user import User
+from app.models.document import Document
 from app.schemas.upload import DocumentOut, DocumentListOut, UploadStatusOut
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
@@ -13,19 +14,38 @@ router = APIRouter(prefix="/upload", tags=["Upload"])
 
 @router.post("", response_model=UploadStatusOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and ingest a document (PDF, DOCX, TXT, CSV)."""
+    """Upload and ingest a document asynchronously."""
     file_bytes = await file.read()
-    doc = ingest_document(file_bytes, file.filename, current_user, db)
+    
+    # Pre-create the document in DB with status "processing"
+    from app.services.upload_service import _validate_file
+    _validate_file(file.filename, len(file_bytes))
+    
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    doc = Document(
+        user_id=current_user.id,
+        filename=file.filename,
+        file_type=ext,
+        status="processing",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    
+    # Run the heavy processing in the background
+    background_tasks.add_task(ingest_document, file_bytes, file.filename, current_user.id, doc.id)
+    
     return UploadStatusOut(
         document_id=doc.id,
         filename=doc.filename,
         status=doc.status,
-        chunk_count=doc.chunk_count,
-        message=f"Ingested {doc.chunk_count} chunks successfully." if doc.status == "ready" else doc.error_message,
+        chunk_count=0,
+        message="Upload received, processing in background.",
     )
 
 

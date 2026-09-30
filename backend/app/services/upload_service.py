@@ -35,26 +35,20 @@ def _validate_file(filename: str, size_bytes: int) -> None:
 def ingest_document(
     file_bytes: bytes,
     filename: str,
-    user: User,
-    db: Session,
-) -> Document:
+    user_id: int,
+    doc_id: int,
+) -> None:
     """
-    Full ingestion pipeline:
-    1. Validate → 2. Create DB record (pending) → 3. Load → 4. Chunk →
-    5. Embed → 6. Store in ChromaDB → 7. Update DB record (ready)
+    Background task:
+    1. Load → 2. Chunk → 3. Embed → 4. Store in ChromaDB → 5. Update DB record (ready)
     """
-    _validate_file(filename, len(file_bytes))
-
-    ext = filename.rsplit(".", 1)[-1].lower()
-    doc = Document(
-        user_id=user.id,
-        filename=filename,
-        file_type=ext,
-        status="processing",
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
+    from app.core.db import SessionLocal
+    db = SessionLocal()
+    
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        db.close()
+        return
 
     try:
         logger.info(f"Loading document '{filename}' (doc_id={doc.id})")
@@ -77,19 +71,15 @@ def ingest_document(
         doc.chunk_count = stored
         doc.status = "ready"
         db.commit()
-        db.refresh(doc)
         logger.info(f"Ingestion complete: doc_id={doc.id}, chunks={stored}")
-        return doc
 
     except Exception as e:
-        logger.error(f"Ingestion failed for doc_id={doc.id}: {e}")
+        logger.error(f"Ingestion failed for doc_id={doc_id}: {e}")
         doc.status = "error"
         doc.error_message = str(e)[:512]
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ingestion failed: {str(e)}",
-        )
+    finally:
+        db.close()
 
 
 def list_documents(user: User, db: Session):

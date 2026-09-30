@@ -3,7 +3,11 @@ FastAPI application entry point.
 All routers are registered here; CORS and startup hooks are configured.
 """
 import logging
+import os
 from contextlib import asynccontextmanager
+
+# Disable ChromaDB telemetry to prevent posthog errors
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +17,7 @@ from app.core.db import create_tables
 from app.api import (
     auth_router, upload_router, query_router,
     history_router, analytics_router, user_router,
+    voice_router,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -53,8 +58,20 @@ app.include_router(query_router, prefix=API_PREFIX)
 app.include_router(history_router, prefix=API_PREFIX)
 app.include_router(analytics_router, prefix=API_PREFIX)
 app.include_router(user_router, prefix=API_PREFIX)
+app.include_router(voice_router, prefix=API_PREFIX)
 
 
 @app.get("/health")
 def health():
     return {"status": "ok", "app": settings.APP_NAME}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=["app"],
+    )
