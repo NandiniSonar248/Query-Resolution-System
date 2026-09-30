@@ -1,0 +1,62 @@
+services:
+  - type: web
+    name: qrs-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_NAME
+        value: AI Query Resolution System
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        sync: false          # set manually in Render dashboard
+      - key: JWT_SECRET_KEY
+        sync: false          # set manually in Render dashboard
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: CHROMA_MODE
+        value: embedded
+      - key: CHROMA_PERSIST_DIR
+        value: /opt/render/project/src/chroma_data
+      - key: LLM_PROVIDER
+        value: ollama
+      - key: OLLAMA_BASE_URL
+        sync: false          # paste your ngrok URL here
+      - key: LLM_MODEL
+        value: gpt-oss:20b-cloud
+      - key: LLM_NUM_CTX
+        value: "4096"
+      - key: EMBEDDING_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false          # set manually in Render dashboard
+      - key: GEMINI_EMBED_MODEL
+        value: gemini-embedding-001
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-3.5-flash-lite
+      - key: RETRIEVAL_SCORE_THRESHOLD
+        value: "0.3"
+      - key: DEFAULT_RETRIEVAL_K
+        value: "5"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "50"
+      - key: CORS_ORIGINS
+        sync: false          # set to your Vercel URL, e.g. ["https://your-app.vercel.app"]
+      - key: SPEECH_ENABLED
+        value: "true"
+      - key: ELEVENLABS_API_KEY
+        sync: false          # set manually in Render dashboard
+      - key: ELEVENLABS_VOICE_ID
+        value: EXAVITQu4vr4xnSDxMaL
+      - key: ELEVENLABS_TTS_MODEL
+        value: eleven_flash_v2_5

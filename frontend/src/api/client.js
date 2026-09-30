@@ -1,7 +1,10 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  // In production (Vercel), VITE_API_URL points to the Render backend.
+  // In local dev, fall back to '/api/v1' so Vite's proxy handles CORS.
+  baseURL: import.meta.env.VITE_API_URL ?? '/api/v1',
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
 
