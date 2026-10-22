@@ -6,8 +6,10 @@ Set EMBEDDING_PROVIDER=ollama  in .env to use local/ngrok Ollama (local dev only
 
 To swap providers, only this file and .env need to change — no agent logic changes needed.
 """
-from typing import List
+from typing import List, Optional
 import logging
+import random
+import time
 
 from app.core.config import settings
 
@@ -22,7 +24,7 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         return []
     provider = settings.EMBEDDING_PROVIDER.lower()
     if provider == "gemini":
-        return _gemini_embed_batch(texts)
+        return _gemini_embed_batch(texts, task_type="RETRIEVAL_DOCUMENT")
     else:
         return _ollama_embed_batch(texts)
 
@@ -31,17 +33,23 @@ def embed_query(query: str) -> List[float]:
     """Embed a single query string."""
     provider = settings.EMBEDDING_PROVIDER.lower()
     if provider == "gemini":
-        return _gemini_embed_batch([query])[0]
+        return _gemini_embed_batch([query], task_type="RETRIEVAL_QUERY")[0]
     else:
         return _ollama_embed_single(query)
 
 
 # ── Gemini Provider ───────────────────────────────────────────────────────────
 
-def _gemini_embed_batch(texts: List[str]) -> List[List[float]]:
+def _gemini_embed_batch(
+    texts: List[str],
+    task_type: str = "RETRIEVAL_DOCUMENT",
+    batch_size: int = 20,
+    max_retries: int = 4,
+) -> List[List[float]]:
     """
-    Embed texts using Google Gemini gemini-embedding-001.
-    Calls embed_content once per text (most reliable approach).
+    Embed texts using Google Gemini API (gemini-embedding-001).
+    Batches texts (up to batch_size per request) and applies exponential
+    backoff retry for transient network and 503/429/500 errors.
     """
     try:
         from google import genai
@@ -62,21 +70,58 @@ def _gemini_embed_batch(texts: List[str]) -> List[List[float]]:
     model = settings.GEMINI_EMBED_MODEL
     all_embeddings: List[List[float]] = []
 
-    for i, text in enumerate(texts):
+    def _call_with_retry(contents: List[str]) -> List[List[float]]:
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                result = client.models.embed_content(
+                    model=model,
+                    contents=contents,
+                    config=types.EmbedContentConfig(task_type=task_type),
+                )
+                return [emb.values for emb in result.embeddings]
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                is_transient = (
+                    "503" in err_str
+                    or "unavailable" in err_str
+                    or "429" in err_str
+                    or "resource_exhausted" in err_str
+                    or "rate" in err_str
+                    or "500" in err_str
+                    or "timeout" in err_str
+                    or "connection" in err_str
+                )
+                if is_transient and attempt < max_retries:
+                    delay = (2 ** attempt) + random.uniform(0.5, 1.5)
+                    logger.warning(
+                        f"Gemini embed temporary failure ({e}). Retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(delay)
+                else:
+                    break
+        raise last_error
+
+    # Process in batches
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
         try:
-            result = client.models.embed_content(
-                model=model,
-                contents=text,
-                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-            )
-            all_embeddings.append(result.embeddings[0].values)
-            if (i + 1) % 20 == 0:
-                logger.info(f"Gemini: embedded {i + 1}/{len(texts)} chunks")
+            batch_embeddings = _call_with_retry(batch)
+            all_embeddings.extend(batch_embeddings)
+            logger.info(f"Gemini: embedded {min(i + len(batch), len(texts))}/{len(texts)} chunks")
         except Exception as e:
-            raise RuntimeError(
-                f"Gemini embedding request failed: {e}. "
-                f"Ensure GEMINI_API_KEY is valid and model '{model}' is accessible."
-            ) from e
+            # If batch failed after retries, fallback to item-by-item processing
+            logger.warning(f"Batch embedding failed ({e}); falling back to item-by-item with retry...")
+            for text in batch:
+                try:
+                    single_emb = _call_with_retry([text])[0]
+                    all_embeddings.append(single_emb)
+                except Exception as single_err:
+                    raise RuntimeError(
+                        f"Gemini embedding request failed: {single_err}. "
+                        f"Ensure GEMINI_API_KEY is valid and model '{model}' is accessible."
+                    ) from single_err
 
     return all_embeddings
 

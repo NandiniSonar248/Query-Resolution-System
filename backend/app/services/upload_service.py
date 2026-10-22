@@ -70,6 +70,7 @@ def ingest_document(
 
         doc.chunk_count = stored
         doc.status = "ready"
+        doc.error_message = None
         db.commit()
         logger.info(f"Ingestion complete: doc_id={doc.id}, chunks={stored}")
 

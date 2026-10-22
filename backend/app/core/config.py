@@ -4,8 +4,9 @@ All tuneable values are loaded from environment variables (with defaults).
 No secrets or tunable values should be hardcoded elsewhere — import from here.
 """
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Any
 
 
 class Settings(BaseSettings):
@@ -14,8 +15,21 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── Database (SQLite default for local dev; swap SQLALCHEMY_DATABASE_URL
-    #    to postgresql://... for Postgres) ────────────────────────────────────
+    #    or DATABASE_URL to postgresql://... for Postgres in production) ──────
     SQLALCHEMY_DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_database_url(cls, data: Any):
+        if isinstance(data, dict):
+            db_url = data.get("DATABASE_URL") or data.get("SQLALCHEMY_DATABASE_URL")
+            if db_url:
+                # Fix SQLAlchemy 2.0 requirement (postgres:// -> postgresql://)
+                if db_url.startswith("postgres://"):
+                    db_url = db_url.replace("postgres://", "postgresql://", 1)
+                data["SQLALCHEMY_DATABASE_URL"] = db_url
+        return data
 
     # ── JWT ──────────────────────────────────────────────────────────────────
     JWT_SECRET_KEY: str = "change-me-in-production-please"
