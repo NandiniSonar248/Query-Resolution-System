@@ -46,6 +46,11 @@ services:
         value: gemini-embedding-001
       - key: GEMINI_CHAT_MODEL
         value: gemini-3.5-flash-lite
+      # Disable re-ranker on Render free tier (512 MB RAM limit).
+      # sentence-transformers CrossEncoder alone needs ~350 MB — causes OOM at startup.
+      # Set to "true" only if you upgrade to a Render plan with 1 GB+ RAM.
+      - key: RERANKER_ENABLED
+        value: "false"
       - key: RETRIEVAL_SCORE_THRESHOLD
         value: "0.3"
       - key: DEFAULT_RETRIEVAL_K

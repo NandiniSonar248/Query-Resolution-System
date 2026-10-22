@@ -26,21 +26,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create DB tables on startup and pre-warm heavy models."""
+    """Create DB tables on startup (idempotent via CREATE IF NOT EXISTS).
+
+    Note: The re-ranker (sentence-transformers CrossEncoder) is intentionally
+    NOT pre-warmed here. On memory-constrained hosts (e.g. Render free tier / 512 MB)
+    loading it at boot causes OOM before the port is bound.
+    It lazy-loads on the first query instead — a small one-time latency trade-off.
+    """
     logger.info("Starting up — creating database tables...")
     create_tables()
     logger.info("Database ready.")
-
-    # Pre-warm the cross-encoder re-ranker so the first query isn't slow
-    if settings.RERANKER_ENABLED:
-        try:
-            from app.rag.reranker import _get_cross_encoder
-            logger.info("Pre-warming re-ranker model at startup...")
-            _get_cross_encoder()
-            logger.info("Re-ranker model ready.")
-        except Exception as e:
-            logger.warning(f"Re-ranker pre-warm failed (non-fatal): {e}")
-
     yield
     logger.info("Shutting down.")
 
